@@ -101,6 +101,24 @@ class SnowflakePandasTypeHandler(DbTypeHandler[pd.DataFrame]):
     def handle_output(
         self, context: OutputContext, table_slice: TableSlice, obj: pd.DataFrame, connection
     ) -> Mapping[str, RawMetadataValue]:
+        """
+        If the DataFrame contains neither rows nor columns, the operation will skip writing to Snowflake. 
+        However, if the DataFrame contains columns (with or without rows), the table will still be created.
+        """
+        if obj.empty and obj.dtypes.empty:
+            return {
+                **(
+                    TableMetadataSet(partition_row_count=0)
+                    if context.has_partition_key
+                    else TableMetadataSet(row_count=0)
+                ),
+                "output_info": (
+                    "Materialization resulted in an empty DataFrame for this partition and no data was written to Snowflake."
+                    if context.has_partition_key
+                    else "Materialization resulted in an empty DataFrame for this table and no data was written to Snowflake.."
+                )
+            }
+            
         from snowflake import connector
 
         connector.paramstyle = "pyformat"
